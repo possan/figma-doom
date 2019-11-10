@@ -1,0 +1,186 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 10f4f79..8bf0f44 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -8,7 +8,7 @@ include_directories(
+     opl
+     sdl_mixer
+     src
+-    src/doom
++    # src/doom
+     )
+ file (GLOB_RECURSE SRC_FILES *.c)
+ 
+@@ -21,29 +21,31 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Oz -Wall \
+     -s USE_LIBPNG=1 \
+     -s ALLOW_MEMORY_GROWTH=1 \
+     -s NO_EXIT_RUNTIME=1 \
+-    -s EXTRA_EXPORTED_RUNTIME_METHODS=['FS'] \
++    -s EXTRA_EXPORTED_RUNTIME_METHODS=['FS','UTF8ToString'] \
+     --no-heap-copy")
+ 
+ if (CMAKE_BUILD_TYPE MATCHES Debug)
+-  add_executable(index ${SRC_FILES})
+-  target_link_libraries(index)
+-  set_target_properties( index PROPERTIES SUFFIX ".html" )
++  add_executable(doomdebug ${SRC_FILES})
++  target_link_libraries(doomdebug)
++  set_target_properties( doomdebug PROPERTIES SUFFIX ".html" )
+ 
+-  set(CMAKE_C_FLAGS_DEBUG "-s ASSERTIONS=2 --source-map-base http://localhost:8000/ -g4 --preload-file ${CMAKE_CURRENT_LIST_DIR}/../doom1.wad@doom1.wad")
++  set(CMAKE_C_FLAGS_DEBUG "-s ASSERTIONS=2 --source-map-base http://localhost:8000/ -g4 --preload-file ${CMAKE_CURRENT_LIST_DIR}/doom1.wad@doom1.wad")
+ 
+-  add_custom_command(TARGET index POST_BUILD
++  add_custom_command(TARGET doomdebug POST_BUILD
+     WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+-    COMMAND sed -i index.wasm.map 's|${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/||g' index.wasm.map
++    COMMAND sed -i doomdebug.wasm.map 's|${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/||g' doomdebug.wasm.map
+     COMMENT "Fix WebAssembly source map root"
+   )
+ 
+-  em_link_js_library(index ${libraryJsFiles})
++  em_link_js_library(doomdebug ${libraryJsFiles})
+ else()
+   add_executable(doom ${SRC_FILES})
+   target_link_libraries(doom)
+-  set_target_properties( doom PROPERTIES SUFFIX ".js" )
++  # set_target_properties( doom PROPERTIES SUFFIX ".js" )
++  set_target_properties( doom PROPERTIES SUFFIX ".html" )
+ 
+-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -s MODULARIZE=1 -s ASSERTIONS=0")
++  # set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -s MODULARIZE=1 -s ASSERTIONS=0")
++  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -s ASSERTIONS=0 --preload-file ${CMAKE_CURRENT_LIST_DIR}/doom1.wad@doom1.wad")
+ 
+   em_link_js_library(doom ${libraryJsFiles})
+ endif()
+diff --git a/src/doom/g_game.c b/src/doom/g_game.c
+index ce62668..af2de10 100644
+--- a/src/doom/g_game.c
++++ b/src/doom/g_game.c
+@@ -684,7 +684,7 @@ void G_DoLoadLevel (void)
+     const char *s = HU_GetMapName();
+ 
+     EM_ASM_({
+-        document.dispatchEvent(new CustomEvent("G_DoLoadLevel", { detail: { mapname: Module.Pointer_stringify($0) } }));
++        document.dispatchEvent(new CustomEvent("G_DoLoadLevel", { detail: { mapname: Module.UTF8ToString($0) } }));
+     }, s);
+ } 
+ 
+@@ -1550,7 +1550,7 @@ void G_DoCompleted (void)
+         var leveltime = $8;
+         document.dispatchEvent(new CustomEvent("G_DoCompleted", {
+             detail: {
+-                mapname: Module.Pointer_stringify($0),
++                mapname: Module.UTF8ToString($0),
+                 maxkills: maxkills,
+                 maxitems: maxitems,
+                 maxsecret: maxsecret,
+@@ -1785,7 +1785,7 @@ void G_DoSaveGame (void)
+ 
+     EM_ASM_({
+         try{
+-            var filename = Module.Pointer_stringify($0);
++            var filename = Module.UTF8ToString($0);
+             var buffer = Module.FS.readFile(filename).buffer;
+             document.dispatchEvent(new CustomEvent("G_SaveGame", { detail: { filename: filename, buffer: buffer } }));
+         }catch(err){}
+diff --git a/src/doom/p_inter.c b/src/doom/p_inter.c
+index f997388..8ad6312 100644
+--- a/src/doom/p_inter.c
++++ b/src/doom/p_inter.c
+@@ -721,7 +721,7 @@ P_KillMobj
+ 
+ 	const char *s = HU_GetMapName();
+ 	EM_ASM_({
+-        document.dispatchEvent(new CustomEvent("P_KillMobj", { detail: { mapname: Module.Pointer_stringify($0), source: Module.Pointer_stringify($1) } }));
++        document.dispatchEvent(new CustomEvent("P_KillMobj", { detail: { mapname: Module.UTF8ToString($0), source: Module.UTF8ToString($1) } }));
+     }, s, t);
+ 
+ 	P_DropWeapon (target->player);
+diff --git a/src/doom/r_data.c b/src/doom/r_data.c
+index 4d0d075..5b2625d 100644
+--- a/src/doom/r_data.c
++++ b/src/doom/r_data.c
+@@ -46,7 +46,7 @@
+ // is stored in vertical runs of opaque pixels (posts).
+ // A column is composed of zero or more posts,
+ // a patch or sprite is composed of zero or more columns.
+-// 
++//
+ 
+ 
+ 
+diff --git a/src/i_gif.c b/src/i_gif.c
+index b7b9881..87cc824 100644
+--- a/src/i_gif.c
++++ b/src/i_gif.c
+@@ -31,7 +31,7 @@ void I_CloseGIF()
+     gif = NULL;
+ 
+     EM_ASM({
+-        var filename = Module.Pointer_stringify($0);
++        var filename = Module.UTF8ToString($0);
+         var url = URL.createObjectURL(new Blob([Module.FS.readFile(filename)], {type: 'image/gif'}));
+         document.dispatchEvent(new CustomEvent("I_CloseGIF", { detail: { url: url } }));
+         Module.FS.unlink(filename);
+diff --git a/src/i_system.c b/src/i_system.c
+index 2913014..06f1252 100644
+--- a/src/i_system.c
++++ b/src/i_system.c
+@@ -259,7 +259,7 @@ void I_Error (const char *error, ...)
+     va_end(argptr);
+ 
+     EM_ASM_({
+-        document.dispatchEvent(new CustomEvent("I_Error", { detail: { errorMsg: Module.Pointer_stringify($0) } }));
++        document.dispatchEvent(new CustomEvent("I_Error", { detail: { errorMsg: Module.UTF8ToString($0) } }));
+     }, msgbuf);
+ 
+     // Shutdown. Here might be other errors.
+diff --git a/src/i_webmusic.c b/src/i_webmusic.c
+index c687c6e..76b0b8c 100644
+--- a/src/i_webmusic.c
++++ b/src/i_webmusic.c
+@@ -1031,7 +1031,7 @@ static void I_WEB_UnRegisterSong(void *handle)
+                 delete window.doom_music_offset;
+                 delete window.doom_music_start;
+                 delete window.doom_music_looping;
+-                var filename = Module.Pointer_stringify($0);
++                var filename = Module.UTF8ToString($0);
+                 Module.FS.unlink("./" + filename);
+             }catch(err){}
+         }, current_filename);
+@@ -1059,7 +1059,7 @@ static void *I_WEB_RegisterSong(void *data, int len)
+         playing_substitute = true;
+         current_filename = filename;
+         EM_ASM_({
+-            var filename = Module.Pointer_stringify($0);
++            var filename = Module.UTF8ToString($0);
+             window.doom_music_filename = filename;
+             fetch(filename).then(function(res){ return res.arrayBuffer(); }).then(function(audio){
+                 var context = SDL2.audioContext;
+diff --git a/src/v_trans.h b/src/v_trans.h
+index 3ebedb5..9ca23bb 100644
+--- a/src/v_trans.h
++++ b/src/v_trans.h
+@@ -35,7 +35,7 @@
+ 
+ #include "doomtype.h"
+ 
+-enum
++typedef enum
+ {
+     CR_NONE,
+     CR_DARK,
+diff --git a/src/v_video.c b/src/v_video.c
+index f4cd30f..e829d83 100644
+--- a/src/v_video.c
++++ b/src/v_video.c
+@@ -1009,7 +1009,7 @@ void WritePNGfile(char *filename, pixel_t *data,
+     fclose(handle);
+ 
+     EM_ASM({
+-        var filename = Module.Pointer_stringify($0);
++        var filename = Module.UTF8ToString($0);
+         var url = URL.createObjectURL(new Blob([Module.FS.readFile(filename)], {type: 'image/png'}));
+         document.dispatchEvent(new CustomEvent("V_ScreenShot", { detail: { url: url } }));
+         Module.FS.unlink(filename);
